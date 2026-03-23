@@ -1,0 +1,43 @@
+# OS and editor files
+.DS_Store
+Thumbs.db
+.vscode/
+
+# Python cache and tooling artifacts
+**/__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+.coverage.*
+htmlcov/
+
+# Virtual environments
+.env
+.venv/
+venv/
+env/
+
+# Local project runtime artifacts
+*.log
+
+# AI project generated artifacts
+/lte-ai-project/env/
+/lte-ai-project/models/backups/
+/lte-ai-project/models/*.pkl
+/lte-ai-project/models/*.joblib
+/lte-ai-project/models/*.onnx
+
+# ns-3 generated build/output directories
+/ns-3-dev/build/
+/ns-3-dev/cmake-cache/
+/ns-3-dev/cmake-build-*/
+
+# ns-3 simulation output files
+/ns-3-dev/*.pcap
+/ns-3-dev/*.tr
+/ns-3-dev/*.xml

@@ -1,0 +1,211 @@
+# LTE-AI SON Cellular Network Configuration
+# Global configuration for simulator, AI engine, and dashboard
+
+# Simulator Configuration
+simulator:
+  # Network topology
+  num_enbs: 6                          # Number of eNodeBs (base stations)
+  num_ues: 2000                        # Number of User Equipments
+  simulation_time: 1800                # Total simulation time in seconds (30 minutes)
+  
+  # KPI Logging
+  kpi_interval: 1.0                    # KPI logging interval in seconds
+  kpi_output_csv: "/home/darkdevil/Desktop/lte-ai-project/data/city_kpi_dataset.csv"
+  
+  # Network Parameters
+  enb_positions:
+    - [0, 0, 0]                        # ENB0
+    - [400, 0, 0]                      # ENB1
+    - [800, 0, 0]                      # ENB2
+    - [0, 400, 0]                      # ENB3
+    - [400, 400, 0]                    # ENB4
+    - [800, 400, 0]                    # ENB5
+  
+  coverage_area:
+    x_min: 0
+    x_max: 1000
+    y_min: 0
+    y_max: 1000
+  
+  ue_mobility:
+    speed_min: 2                       # m/s
+    speed_max: 10                      # m/s
+    pause_time: 1                      # seconds
+  
+  # Sockets
+  ai_server_port: 5000                 # Port for AI communication
+  websocket_port: 5001                 # Port for error injection UI
+  
+  # Logger
+  log_component: "ImprovedCityLteSim"
+
+# AI Engine Configuration
+ai_engine:
+  # Model paths
+  model_dir: "models/"
+  hybrid_model_path: "models/network_ai_hybrid.pkl"
+  anomaly_model_path: "models/anomaly_detector.pkl"
+  trend_model_path: "models/trend_predictor.pkl"
+  
+  # Server settings
+  server_host: "127.0.0.1"
+  server_port: 5000
+  
+  # Model parameters
+  anomaly_detection:
+    algorithm: "IsolationForest"       # Isolation Forest for anomaly detection
+    contamination: 0.1                 # Expected proportion of anomalies
+    n_estimators: 100
+    random_state: 42
+  
+  trend_prediction:
+    algorithm: "LSTM"                  # LSTM or GradientBoosting
+    lookback_window: 10                # Seconds of historical data
+    forecast_horizon: 5                # Seconds ahead to predict
+    lstm_units: 50
+    dropout: 0.2
+    epochs: 50
+    batch_size: 32
+  
+  # Decision thresholds
+  anomaly_threshold: 0.7               # If anomaly score > this, trigger alert
+  failure_probability_threshold: 0.6   # If risk > this, take preventive action
+  
+  # Actions
+  actions:
+    0: "balance"                       # Normal power ~20dBm
+    1: "increase_power"                # 30dBm + load balancing
+    2: "reduce_power"                  # 15dBm + carrier aggregation
+    3: "handover"                      # Initiate load balancing to neighbor
+
+# Online Learning Configuration
+model_updater:
+  enabled: true
+  retraining_interval: 100             # Retrain after 100 new rows in training_dataset.csv
+  validation_split: 0.2
+  test_split: 0.1
+  min_accuracy: 0.75                   # Min accuracy to accept new model
+  model_backup_dir: "models/backups/"
+  log_retraining: true
+
+# Error Injection Configuration
+error_injection:
+  enabled: true
+  supported_errors:
+    - "congestion"                     # UE spike
+    - "underutilization"               # UE departure
+    - "interference"                   # RF interference (SINR drop)
+    - "equipment_degradation"          # Power/throughput drop
+    - "jamming"                        # Jamming attack
+    - "ddos"                           # DDoS attack
+    - "weather"                        # Environmental impact
+    - "handover_failure"               # Handover issues
+  
+  # Error impact parameters
+  error_params:
+    congestion:
+      ue_increase_factor: 5.0          # Multiply UEs by this
+      latency_increase: 50             # ms
+      throughput_decrease: 0.5         # Multiply
+    
+    underutilization:
+      ue_decrease_factor: 0.2
+      duration: 30                     # seconds
+    
+    interference:
+      sinr_decrease: 20                # dB reduction
+      rsrp_decrease: 15                # dBm reduction
+    
+    equipment_degradation:
+      throughput_decrease: 0.7
+      latency_increase: 100
+      duration: 60
+    
+    jamming:
+      sinr_decrease: 30
+      packet_loss_increase: 0.8        # 80% loss
+      duration: 30
+    
+    ddos:
+      packet_loss_increase: 0.9
+      latency_increase: 200
+      throughput_decrease: 0.1
+      duration: 45
+    
+    weather:
+      rsrp_decrease: 10
+      duration: 120
+    
+    handover_failure:
+      handover_count_increase: 5
+      connection_loss_probability: 0.3
+      duration: 20
+
+# Dashboard Configuration
+dashboard:
+  host: "127.0.0.1"
+  port: 8050
+  debug: false
+  
+  # Update frequency
+  refresh_interval: 1000               # milliseconds
+  history_window: 60                   # seconds of past data to display
+  
+  # Graphs to display
+  metrics:
+    - "throughput"
+    - "delay"
+    - "packet_loss"
+    - "ue_count"
+    - "rsrp"
+    - "sinr"
+    - "cell_load"
+    - "handover_count"
+  
+  # Layout
+  grid_columns: 2
+  colors:
+    normal: "#00FF00"
+    warning: "#FFFF00"
+    critical: "#FF0000"
+
+# Data Pipeline Configuration
+data_pipeline:
+  training_data_path: "training_dataset.csv"
+  kpi_data_path: "dataset/city_kpi_dataset.csv"
+  
+  # CSV schema
+  kpi_columns:
+    - "timestamp"
+    - "simulation_time"
+    - "throughput_0"
+    - "delay_0"
+    - "loss_0"
+    - "ue_count_0"
+    - "rsrp_0"
+    - "sinr_0"
+    - "cell_load_0"
+    - "handovers_0"
+    # ... repeat for cells 1-5
+    - "ai_action_0"                    # Action taken by AI
+    - "ai_anomaly_0"                   # Anomaly score 0-1
+    - "ai_risk_0"                      # Failure probability 0-1
+    - "error_type"                     # Ground truth error (if any)
+    - "error_severity"                 # 0-1
+  
+  # Processing
+  batch_size: 32
+  normalize_features: true
+  feature_scaling: "StandardScaler"    # or MinMaxScaler
+
+# Logging Configuration
+logging:
+  level: "INFO"                        # DEBUG, INFO, WARNING, ERROR
+  log_file: "logs/simulation.log"
+  console_output: true
+  
+# Performance Monitoring
+monitoring:
+  track_cpu_usage: true
+  track_memory_usage: true
+  track_inference_latency: true
