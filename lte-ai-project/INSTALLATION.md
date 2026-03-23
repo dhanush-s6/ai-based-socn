@@ -10,7 +10,7 @@ Required on Ubuntu/Linux:
 
 ## 2. Project Setup
 
-From project root (`/home/darkdevil/Desktop/lte-ai-project`):
+From project root (`~/Desktop/lte-ai-project`):
 
 ```bash
 python3 -m venv env
@@ -24,7 +24,7 @@ pip install -r requirements.txt
 Build simulator from NS-3 root:
 
 ```bash
-cd /home/darkdevil/Desktop/ns-3-dev
+cd ~/Desktop/ns-3-dev
 ns3 build
 ```
 
@@ -41,17 +41,17 @@ Start in this order in separate terminals.
 ### Terminal 1: AI Server
 
 ```bash
-cd /home/darkdevil/Desktop/lte-ai-project
+cd ~/Desktop/lte-ai-project
 source env/bin/activate
-python ai_server.py
+python3 ai_server.py
 ```
 
 ### Terminal 2: Dashboard
 
 ```bash
-cd /home/darkdevil/Desktop/lte-ai-project
+cd ~/Desktop/lte-ai-project
 source env/bin/activate
-python dashboard/app.py
+python3 dashboard/app.py
 ```
 
 Open:
@@ -60,7 +60,7 @@ Open:
 ### Terminal 3: NS-3 Simulator
 
 ```bash
-cd /home/darkdevil/Desktop/ns-3-dev
+cd ~/Desktop/ns-3-dev
 ns3 run "lte_ai_simulator_2000ues --numUe=2000 --simTime=1800 --kpiInterval=1.0"
 ```
 
@@ -82,18 +82,18 @@ From dashboard:
 ## 6. Important Runtime Files
 
 1. KPI CSV output:
-   - `/home/darkdevil/Desktop/ns-3-dev/city_kpi_dataset.csv`
+   - `~/Desktop/ns-3-dev/city_kpi_dataset.csv`
 2. AI decisions log:
-   - `/home/darkdevil/Desktop/lte-ai-project/ai_decisions.log`
+   - `~/Desktop/lte-ai-project/ai_decisions.log`
 
 ## 7. Retraining Model (Optional)
 
 Manual retrain from current dataset:
 
 ```bash
-cd /home/darkdevil/Desktop/lte-ai-project
+cd ~/Desktop/lte-ai-project
 source env/bin/activate
-python - <<'PY'
+python3 - <<'PY'
 from ai_engine.hybrid_predictor import HybridPredictor
 p = HybridPredictor()
 p.train('training_dataset.csv')
