@@ -51,7 +51,7 @@ def load_kpi_data():
     """Load latest KPI data from CSV."""
     # Try both possible paths
     possible_paths = [
-        Path("/home/darkdevil/Desktop/ns-3-dev/city_kpi_dataset.csv"),
+        Path("~/Desktop/ns-3-dev/city_kpi_dataset.csv"),
         Path(get_config("simulator.kpi_output_csv", "dataset/city_kpi_dataset.csv"))
     ]
     
