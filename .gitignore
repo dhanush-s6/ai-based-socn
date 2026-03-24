@@ -24,6 +24,7 @@ env/
 
 # Local project runtime artifacts
 *.log
+/ns-3-dev.tar.gz
 
 # AI project generated artifacts
 /lte-ai-project/env/
