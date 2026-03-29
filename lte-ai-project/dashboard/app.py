@@ -584,14 +584,28 @@ def update_graphs(n):
             overloaded = int(np.sum(current_loads > 0.85))
             underutilized = int(np.sum(current_loads < 0.30))
 
+    active_error_status = error_injector.get_status(current_time=0)
+    active_errors = active_error_status.get("active_errors", 0)
+    active_details = active_error_status.get("active_error_details", [])
+
     status_text = f"""Last Update: {datetime.now().strftime('%H:%M:%S')}
 Data Points: {len(df)}
-Active Errors: {len(error_injector.get_active_errors(0))}
+Active Errors: {active_errors}
 Load Imbalance: {load_imbalance:.2f}
 Overloaded Cells: {overloaded} | Underutilized Cells: {underutilized}
 Model Status: Ready
 """
-    
+
+    if active_details:
+        status_text += "Active Error Details:\n"
+        for detail in active_details:
+            status_text += (
+                f"  eNB{detail.get('cell_id', '?')+1}: {detail.get('error_type', 'unknown')} "
+                f"(severity={detail.get('severity', '?'):.2f}, duration={detail.get('duration', '?')}s)\n"
+            )
+
+    status_text += "Error timeline available via NS3 WS command get_error_timeline\n"
+
     # Load and display AI decisions
     ai_log_content = load_ai_decisions()
     
@@ -610,64 +624,91 @@ Model Status: Ready
 )
 def inject_error(n_clicks, error_type, cell_id, severity, duration):
     """Handle error injection."""
-    if n_clicks == 0:
-        return ["", {}]
+    if not n_clicks or n_clicks == 0:
+        return [html.Div(), {}]
+    
+    if not error_type or cell_id is None or severity is None or duration is None:
+        logger.warning("Missing required parameters for error injection")
+        return [html.Div("⚠ Missing parameters", style={"color": "#f39c12"}), {}]
     
     try:
-        # Send error to NS3 simulator via TCP socket on port 5001
         import socket
         import time
         
         error_msg = f"type:{error_type},cell_id:{cell_id},intensity:{severity},duration:{duration}"
+        logger.info(f"[Inject] Attempting to send: {error_msg}")
+        
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        sock.settimeout(1)
+        sock.settimeout(2)
+        response = "Sent"
         
         try:
-            logger.info(f"Connecting to NS3 on 127.0.0.1:5001 to inject: {error_msg}")
+            logger.info(f"[Inject] Connecting to 127.0.0.1:5001...")
             sock.connect(("127.0.0.1", 5001))
+            logger.info(f"[Inject] Connected, sending message...")
             
-            # Send error message
-            sock.sendall(error_msg.encode() + b'\n')
-            time.sleep(0.1)
+            sock.sendall(error_msg.encode('utf-8') + b'\n')
+            logger.info(f"[Inject] Message sent, waiting for response...")
             
-            # Try to receive acknowledgment
+            # Try to get response with timeout
             try:
-                response = sock.recv(1024).decode('utf-8', errors='ignore')
-                logger.info(f"NS3 response: {response}")
+                sock.settimeout(1.0)
+                response = sock.recv(4096).decode('utf-8', errors='ignore').strip()
+                logger.info(f"[Inject] Response received: {response}")
             except socket.timeout:
-                logger.warning("No response from NS3 (timeout)")
-                response = "Sent (no immediate response)"
-            
-            sock.close()
-            
-            output = html.Div([
-                html.P("✓ Error Injected Successfully", style={"color": "#27ae60", "fontWeight": "bold"}),
-                html.P(f"Type: {error_type}", style={"margin": "5px 0"}),
-                html.P(f"Cell: eNB{cell_id + 1}", style={"margin": "5px 0"}),
-                html.P(f"Intensity: {severity:.1f}", style={"margin": "5px 0"}),
-                html.P(f"Duration: {duration}s", style={"margin": "5px 0"}),
-                html.P(f"Response: {response}", style={"margin": "5px 0", "fontSize": "11px", "color": "#666"})
-            ], style={"padding": "10px", "background-color": "#d5f4e6", "borderRadius": "5px"})
-            
-            return [output, {"status": "success", "message": error_msg}]
+                logger.warning("[Inject] No response from NS3 (timeout)")
+                response = "Command sent to NS-3"
+            except Exception as recv_err:
+                logger.warning(f"[Inject] Error reading response: {recv_err}")
+                response = "Command sent (response read failed)"
         
-        except (ConnectionRefusedError, OSError) as e:
-            sock.close()
-            logger.error(f"Cannot connect to NS3: {e}")
-            output = html.Div([
-                html.P("⚠ Simulator not connected", style={"color": "#f39c12", "fontWeight": "bold"}),
-                html.P(f"NS3 simulator on port 5001 not available: {str(e)}", style={"margin": "5px 0", "fontSize": "11px"})
-            ], style={"padding": "10px", "background-color": "#fdebd0", "borderRadius": "5px"})
-            return [output, {}]
+        except ConnectionRefusedError as conn_err:
+            logger.error(f"[Inject] Connection refused: {conn_err}")
+            response = None
+            raise
+        except socket.timeout as timeout_err:
+            logger.error(f"[Inject] Connection timeout: {timeout_err}")
+            response = None
+            raise
+        except OSError as os_err:
+            logger.error(f"[Inject] OS error: {os_err}")
+            response = None
+            raise
+        finally:
+            try:
+                sock.close()
+            except:
+                pass
+        
+        # Success output
+        output = html.Div([
+            html.P("✓ Error Injected Successfully", style={"color": "#27ae60", "fontWeight": "bold"}),
+            html.P(f"Type: {error_type}", style={"margin": "5px 0"}),
+            html.P(f"Cell: eNB{cell_id + 1}", style={"margin": "5px 0"}),
+            html.P(f"Intensity: {severity:.1f}", style={"margin": "5px 0"}),
+            html.P(f"Duration: {duration}s", style={"margin": "5px 0"}),
+            html.P(f"Response: {response}", style={"margin": "5px 0", "fontSize": "11px", "color": "#666"})
+        ], style={"padding": "10px", "background-color": "#d5f4e6", "borderRadius": "5px", "marginTop": "10px"})
+        
+        logger.info(f"[Inject] Returning success output")
+        return [output, {"status": "success", "message": error_msg, "response": response}]
+    
+    except (ConnectionRefusedError, OSError, socket.timeout) as e:
+        logger.error(f"[Inject] Connection error: {e}")
+        output = html.Div([
+            html.P("⚠ Simulator not connected", style={"color": "#f39c12", "fontWeight": "bold"}),
+            html.P(f"NS3 simulator on port 5001 unavailable: {str(e)}", style={"margin": "5px 0", "fontSize": "11px", "color": "#666"})
+        ], style={"padding": "10px", "background-color": "#fdebd0", "borderRadius": "5px", "marginTop": "10px"})
+        return [output, {"status": "error", "message": str(e)}]
     
     except Exception as e:
-        logger.error(f"Error injection failed: {e}", exc_info=True)
+        logger.error(f"[Inject] Unexpected error: {e}", exc_info=True)
         output = html.Div([
             html.P("✗ Error Injection Failed", style={"color": "#e74c3c", "fontWeight": "bold"}),
-            html.P(str(e), style={"margin": "5px 0", "fontSize": "11px"})
-        ], style={"padding": "10px", "background-color": "#fadbd8", "borderRadius": "5px"})
+            html.P(str(e), style={"margin": "5px 0", "fontSize": "11px", "color": "#666"})
+        ], style={"padding": "10px", "background-color": "#fadbd8", "borderRadius": "5px", "marginTop": "10px"})
         
-        return [output, {}]
+        return [output, {"status": "error", "message": str(e)}]
 
 
 @app.callback(
