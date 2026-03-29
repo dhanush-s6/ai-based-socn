@@ -9,6 +9,7 @@ import socket
 import json
 import sys
 import threading
+import time
 import numpy as np
 import warnings
 from pathlib import Path
@@ -349,17 +350,25 @@ class AIServer:
             
             logger.info(f"✓ AI Server listening on {self.host}:{self.port}")
             logger.info("Waiting for NS3 simulator connection...")
-            
-            # Accept client connection
-            self.client_conn, self.client_addr = self.server.accept()
-            
+
             # Start model updater for continuous learning
             if get_config("model_updater.enabled", True):
                 self.model_updater.start_continuous_monitoring()
                 logger.info("Model updater started - continuous retraining enabled")
-            
-            # Handle client in main thread
-            self.handle_client()
+            else:
+                logger.warning("Model updater is disabled in configuration.")
+
+            # Accept client connections and handle in loop
+            while self.running:
+                try:
+                    self.client_conn, self.client_addr = self.server.accept()
+                    logger.info(f"NS3 simulator connected from {self.client_addr}")
+                    self.handle_client()
+                except Exception as e:
+                    logger.error(f"Error accepting or handling client connection: {e}")
+                    if not self.running:
+                        break
+                    time.sleep(1)
         
         except KeyboardInterrupt:
             logger.info("Shutting down AI server...")

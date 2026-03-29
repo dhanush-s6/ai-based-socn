@@ -49,29 +49,28 @@ error_injector = get_error_injector()
 
 def load_kpi_data():
     """Load latest KPI data from CSV."""
-    # Try both possible paths
-    possible_paths = [
-        Path("~/Desktop/ns-3-dev/city_kpi_dataset.csv"),
-        Path(get_config("simulator.kpi_output_csv", "dataset/city_kpi_dataset.csv"))
-    ]
-    
+    config_path = Path(get_config("simulator.kpi_output_csv", "dataset/city_kpi_dataset.csv"))
+    default_path = Path("~/Desktop/project/ns-3-dev/city_kpi_dataset.csv").expanduser()
+
+    sim_data_path = Path("/home/thanos-s6/Desktop/project/lte-ai-project/data/city_kpi_dataset.csv")
+    paths_to_try = [config_path.expanduser(), default_path, sim_data_path]
+
     kpi_path = None
-    for path in possible_paths:
+    for path in paths_to_try:
         if path.exists():
             kpi_path = path
             break
-    
+
     if not kpi_path:
-        logger.warning(f"KPI file not found at any location")
+        logger.warning(f"KPI file not found at any location. Checked: {paths_to_try}")
         return None
-    
+
     try:
         df = pd.read_csv(kpi_path)
-        # Load ALL data (no limit) for full visualization
         logger.info(f"Loaded {len(df)} data points from {kpi_path}")
         return df
     except Exception as e:
-        logger.error(f"Error loading KPI data: {e}")
+        logger.error(f"Error loading KPI data from {kpi_path}: {e}")
         return None
 
 
