@@ -2,7 +2,8 @@
 """
 AI Model Training Script
 
-Generates a training dataset using NS3 simulator, then trains the hybrid AI model.
+Generates a training dataset using NS3 simulator, then trains the hybrid AI model
+with error-aware augmentation.
 """
 
 import os
@@ -16,6 +17,7 @@ sys.path.insert(0, str(Path(__file__).parent))
 
 from ai_engine.hybrid_predictor import HybridPredictor
 from config.config_manager import get_config
+from training.error_data_generator import generate_error_aware_training_data
 
 def run_dataset_generator(num_ues=500, sim_time=600):
     """Run NS3 dataset generator to create training data."""
@@ -55,6 +57,33 @@ def run_dataset_generator(num_ues=500, sim_time=600):
     
     return True
 
+def augment_with_errors(dataset_path):
+    """**NEW**: Augment training data with error scenarios for better AI training."""
+    print("\n" + "="*60)
+    print("STEP 1.5: Augmenting Data with Error Scenarios")
+    print("="*60)
+    
+    try:
+        print("\n[ERROR-AWARE TRAINING]")
+        print("The AI model needs to learn patterns from error scenarios.")
+        print("Augmenting training data with 8 QoS degradation factors...\n")
+        
+        # Augment dataset with error-injected samples
+        augmented_path = generate_error_aware_training_data(
+            str(dataset_path),
+            str(dataset_path),  # Overwrite original
+            multiplier=0.5  # Add 50% more samples with errors
+        )
+        
+        print(f"✓ Data augmentation complete!")
+        return True
+    
+    except Exception as e:
+        print(f"⚠ Note: Error augmentation failed ({str(e)})")
+        print(f"  Training will proceed with original data only.")
+        print(f"  This means the model may not learn error responses well.")
+        return False
+
 def train_model(dataset_path):
     """Train the hybrid AI model on the generated dataset."""
     print("\n" + "="*60)
@@ -69,6 +98,14 @@ def train_model(dataset_path):
         df = pd.read_csv(dataset_path)
         print(f"Dataset shape: {df.shape}")
         print(f"Columns: {df.columns.tolist()}")
+        
+        # Check if error augmentation was applied
+        if '_error_type' in df.columns:
+            error_count = df['_error_type'].notna().sum()
+            print(f"✓ Error-augmented samples detected: {error_count}")
+        else:
+            print(f"⚠ No error-augmented samples in dataset")
+            print(f"  Consider running error augmentation for better model training")
         
         # Create and train model
         print("\nInitializing hybrid predictor...")
@@ -158,8 +195,11 @@ def main():
         print("\n❌ Failed to generate dataset")
         sys.exit(1)
     
-    # Step 2: Train model
+    # Step 1.5: **NEW** Augment with error scenarios
     dataset_path = "/home/darkdevil/Desktop/lte-ai-project/data/training_dataset.csv"
+    augment_with_errors(dataset_path)  # Non-fatal if fails
+    
+    # Step 2: Train model (now with error-augmented data)
     if not train_model(dataset_path):
         print("\n❌ Failed to train model")
         sys.exit(1)

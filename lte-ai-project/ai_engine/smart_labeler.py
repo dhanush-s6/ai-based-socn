@@ -9,6 +9,7 @@ It implements proper SON logic:
 - Power adjustment based on signal quality
 - Controlled handovers
 - SLA compliance (delay <50ms, loss <1%, throughput target)
+- Error awareness: Intelligent responses to detected error patterns
 """
 
 import numpy as np
@@ -48,6 +49,69 @@ class SONRules:
     cost_power_increase = 0.5  # Moderate cost
     cost_power_decrease = 0.3  # Slightly cheaper than increase
     cost_handover = 2.0  # Expensive (disruptive)
+
+
+class ErrorDetector:
+    """
+    **ERROR AWARENESS MODULE**: Detects anomalous patterns indicating errors.
+    
+    Maps 8 error types to observable KPI signatures:
+    - CONGESTION: High load, queue delay, packet loss
+    - UNDERUTILIZATION: Low load, low traffic
+    - INTERFERENCE: Degraded SINR, high packet loss, low throughput
+    - EQUIPMENT_DEGRADATION: Consistent throughput reduction, increased delay
+    - JAMMING: Severe SINR/RSRP degradation, high loss
+    - DDOS: Extremely high delay, massive packet loss, network load spike
+    - WEATHER: RSRP/SINR degradation (but geographically correlated)
+    - HANDOVER_FAILURE: Packet loss spikes, sudden delay increases
+    """
+    
+    @staticmethod
+    def detect_errors(cell: Dict) -> List[str]:
+        """
+        Detect likely error types from cell KPI patterns.
+        
+        Returns:
+            List of detected error types (can be multiple)
+        """
+        detected = []
+        
+        # DDOS: Extreme delay + extreme packet loss
+        if cell['delay'] > 200 and cell['packet_loss'] > 0.30:
+            detected.append('DDOS')
+        
+        # JAMMING: Severe signal degradation + very high loss
+        if cell['sinr'] < -15 and cell['rsrp'] < -130 and cell['packet_loss'] > 0.40:
+            detected.append('JAMMING')
+        
+        # CONGESTION: High load + degraded throughput + queuing
+        if cell['cell_load'] > 0.85 and cell['throughput'] < 5 and cell['delay'] > 80:
+            detected.append('CONGESTION')
+        
+        # UNDERUTILIZATION: Low load + low traffic
+        if cell['cell_load'] < 0.3 and cell['ue_count'] < 50:
+            detected.append('UNDERUTILIZATION')
+        
+        # INTERFERENCE: Moderate signal loss + packet loss
+        if -110 > cell['rsrp'] > -125 and 0.1 < cell['packet_loss'] < 0.3:
+            detected.append('INTERFERENCE')
+        
+        # EQUIPMENT_DEGRADATION: Consistent throughput degradation + delay
+        if cell['throughput'] < 3 and cell['delay'] > 60:
+            detected.append('EQUIPMENT_DEGRADATION')
+        
+        # WEATHER: SINR+RSRP degradation without extreme loss (unlike jamming)
+        if cell['sinr'] < 0 and cell['rsrp'] < -120 and cell['packet_loss'] < 0.2:
+            detected.append('WEATHER')
+        
+        # HANDOVER_FAILURE: Sudden loss spikes + delay increase
+        if cell['packet_loss'] > 0.15 and cell['delay'] > 70:
+            detected.append('HANDOVER_FAILURE')
+        
+        return detected
+
+
+class SONRules:
 
 
 class SmartLabeler:
@@ -143,8 +207,19 @@ class SmartLabeler:
         return actions
     
     def _decide_cell_action(self, cell: Dict, all_cells: List[Dict]) -> int:
-        """Decide optimal action for a single cell."""
+        """Decide optimal action for a single cell.
         
+        **CRITICAL FIX**: Now includes error awareness to handle error scenarios properly.
+        """
+        
+        # **NEW**: Detect errors to understand root cause of degradation
+        detected_errors = ErrorDetector.detect_errors(cell)
+        
+        # If errors detected, apply specialized response logic
+        if detected_errors:
+            return self._decide_action_with_errors(cell, all_cells, detected_errors)
+        
+        # Original logic for non-error cases
         # SLA Violation → Consider handover
         sla_violated = (
             cell['delay'] > self.rules.max_delay_ms or
@@ -178,6 +253,69 @@ class SmartLabeler:
         
         # Default: maintain balance
         return 0  # BALANCE
+    
+    def _decide_action_with_errors(self, cell: Dict, all_cells: List[Dict], errors: List[str]) -> int:
+        """
+        Specialized decision logic when errors are detected.
+        
+        Error→Action Mapping (8 QoS factors):
+        - CONGESTION → HANDOVER (offload users to neighbors)
+        - UNDERUTILIZATION → REDUCE_POWER (save energy)
+        - INTERFERENCE → REDUCE_POWER (reduce noise generation)
+        - EQUIPMENT_DEGRADATION → HANDOVER (failover users)
+        - JAMMING → HANDOVER + REDUCE_POWER (get away from attacker)
+        - DDOS → HANDOVER (distribute load, network-wide action)
+        - WEATHER → INCREASE_POWER (fight attenuation)
+        - HANDOVER_FAILURE → BALANCE (stabilize, avoid cascading failures)
+        """
+        action_scores = np.zeros(4)  # Score for each action: [0=BALANCE, 1=INCREASE_POWER, 2=REDUCE_POWER, 3=HANDOVER]
+        
+        for error_type in errors:
+            if error_type == 'CONGESTION':
+                # Try to offload congested cell
+                action_scores[3] += 2.0  # Strong preference for HANDOVER
+            
+            elif error_type == 'UNDERUTILIZATION':
+                # Reduce power to save resources
+                action_scores[2] += 1.5  # REDUCE_POWER
+            
+            elif error_type == 'INTERFERENCE':
+                # Reduce power to minimize interference generation
+                action_scores[2] += 2.0  # REDUCE_POWER
+            
+            elif error_type == 'EQUIPMENT_DEGRADATION':
+                # Equipment is failing, offload users
+                action_scores[3] += 2.0  # HANDOVER (failover)
+            
+            elif error_type == 'JAMMING':
+                # Under attack: reduce power, consider handover
+                action_scores[2] += 1.5  # Reduce power
+                action_scores[3] += 1.5  # Also consider handover
+            
+            elif error_type == 'DDOS':
+                # Network-wide attack: redistribute load
+                action_scores[3] += 3.0  # Strong HANDOVER (distribute attack load)
+            
+            elif error_type == 'WEATHER':
+                # Environmental degradation: increase power to fight attenuation
+                action_scores[1] += 2.0  # INCREASE_POWER
+            
+            elif error_type == 'HANDOVER_FAILURE':
+                # Stability is key during handover failures
+                action_scores[0] += 1.0  # BALANCE (avoid further disruption)
+        
+        # Choose action with highest score
+        best_action = int(np.argmax(action_scores))
+        
+        # Safety check: only execute handover if neighbor available
+        if best_action == 3 and not self._find_best_neighbor(cell, all_cells):
+            # No good neighbor, fall back to power adjustment
+            if 'WEATHER' in errors:
+                return 1  # INCREASE_POWER for weather
+            else:
+                return 2  # REDUCE_POWER for other interference
+        
+        return best_action
     
     def _find_best_neighbor(self, cell: Dict, all_cells: List[Dict]) -> Dict:
         """

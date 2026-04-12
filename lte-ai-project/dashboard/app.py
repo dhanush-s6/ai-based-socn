@@ -552,6 +552,38 @@ def update_graphs(n):
                     })
                     row_metrics.append(metric_box)
             
+            # **NEW**: Check if this cell has active errors from error_injector
+            active_error_status = error_injector.get_status(current_time=0)
+            active_details = active_error_status.get("active_error_details", [])
+            
+            # Check if this eNB (0-indexed internally, 1-indexed in display) has errors
+            cell_errors = [d for d in active_details if d.get('cell_id') == enb_id - 1]
+            
+            # Create error badge if errors present
+            error_badge = html.Div()
+            if cell_errors:
+                error_types = ", ".join([d.get('error_type', 'unknown').replace('_', ' ').title() for d in cell_errors])
+                error_severity = max([d.get('severity', 0) for d in cell_errors])
+                error_color = COLOR_CRITICAL if error_severity > 0.7 else COLOR_WARNING
+                
+                error_badge = html.Div([
+                    html.Div("⚠️ ERRORS", style={"fontSize": "11px", "fontWeight": "bold", "color": "white"}),
+                    html.Div(error_types, style={"fontSize": "10px", "color": "white", "whiteSpace": "normal"}),
+                    html.Div(f"Severity: {error_severity:.2f}", style={"fontSize": "10px", "color": "white"})
+                ], style={
+                    "padding": "10px",
+                    "textAlign": "center",
+                    "border": f"2px solid {error_color}",
+                    "borderRadius": "4px",
+                    "margin": "0 5px",
+                    "background-color": error_color,
+                    "minWidth": "80px",
+                    "display": "flex",
+                    "flexDirection": "column",
+                    "justifyContent": "center",
+                    "alignItems": "center"
+                })
+            
             # Create row for this eNB
             row_div = html.Div([
                 html.Div(f"eNB{enb_id}", style={
@@ -563,7 +595,8 @@ def update_graphs(n):
                     "textAlign": "center",
                     "borderRadius": "4px 0 0 4px"
                 }),
-                html.Div(row_metrics, style={"display": "flex", "flex": "1"})
+                html.Div(row_metrics, style={"display": "flex", "flex": "1"}),
+                error_badge
             ], style={
                 "display": "flex",
                 "marginBottom": "10px",

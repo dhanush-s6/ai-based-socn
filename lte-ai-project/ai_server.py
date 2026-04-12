@@ -133,9 +133,23 @@ class AIServer:
                 logger.error(f"KPI data: {kpi_data}")
                 return self._get_error_response(f"Invalid input size: {len(kpi_data)} (expected 42)")
             
-            # Get predictions from hybrid model
+            # **CRITICAL FIX**: Apply error injection modifications to raw KPI data
+            # This ensures the AI sees error-degraded metrics, not raw metrics
+            current_sim_time = float(self.request_count)  # Use request count as proxy for simulation time
+            kpi_data_with_errors, error_metadata = self.error_injector.apply_errors_to_kpi_vector(
+                kpi_data, 
+                current_time=current_sim_time
+            )
+            
+            # Log if errors are active
+            if error_metadata:
+                logger.info(f"Errors active: {len(error_metadata)} error events")
+                for err in error_metadata:
+                    logger.debug(f"  Cell {err['cell_id']}: {err['error_type']} (severity={err['severity']:.2f})")
+            
+            # Get predictions from hybrid model (using error-modified KPIs)
             try:
-                predictions = self.model.predict(kpi_data)
+                predictions = self.model.predict(kpi_data_with_errors)
             except ValueError as ve:
                 if "features" in str(ve).lower():
                     logger.error(f"Feature mismatch error: {ve}")
@@ -190,6 +204,15 @@ class AIServer:
                 cell_pred["validated_action"] = int(validation_info.get("final", cell_pred["action"]))
                 cell_pred["validation_warnings"] = validation_info.get("warnings", [])
 
+                # **CRITICAL FIX**: Add error metadata to cell predictions for dashboard visualization
+                cell_errors = [e for e in error_metadata if e["cell_id"] == idx]
+                if cell_errors:
+                    cell_pred["active_errors"] = cell_errors
+                    cell_pred["has_errors"] = True
+                else:
+                    cell_pred["active_errors"] = []
+                    cell_pred["has_errors"] = False
+
                 # Ensure returned action matches the validated result.
                 if idx < len(actions):
                     cell_pred["action"] = int(actions[idx])
@@ -201,11 +224,12 @@ class AIServer:
             # Log decision to file for dashboard to read
             self._log_decision(predictions)
             
-            # Return JSON response
+            # Return JSON response with error context
             response = {
                 "status": "success",
                 "actions": actions,
                 "predictions": predictions,
+                "error_context": error_metadata,
                 "request_id": self.request_count,
                 "statistics": self.get_statistics()
             }

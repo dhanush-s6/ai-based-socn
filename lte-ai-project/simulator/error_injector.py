@@ -6,7 +6,7 @@ Handles injecting errors into the simulator and tracking error events.
 
 from dataclasses import dataclass, asdict
 from datetime import datetime
-from typing import Optional, Dict, List
+from typing import Optional, Dict, List, Tuple
 import json
 from simulator.error_definitions import ErrorType, KPIImpactCalculator, ERROR_CATALOG
 
@@ -210,6 +210,94 @@ class ErrorInjector:
         with open(filepath, 'w') as f:
             json.dump(self.error_impact_log, f, indent=2)
         print(f"[ErrorInjector] Impact log exported to {filepath}")
+    
+    def apply_errors_to_kpi_vector(
+        self,
+        kpi_vector: list,
+        current_time: float = 0.0
+    ) -> Tuple[list, List[dict]]:
+        """
+        Apply active errors to a flat KPI vector and return modified vector with error metadata.
+        
+        This is the key integration point: converts raw KPI vector into error-aware KPI vector.
+        
+        Args:
+            kpi_vector: Flat list of 42 KPI values [7 metrics × 6 cells]
+                       Order: [th1,del1,loss1,ue1,rsrp1,sinr1,load1, th2,del2,...]
+            current_time: Current simulation time
+        
+        Returns:
+            Tuple of (modified_kpi_vector, active_error_metadata)
+        """
+        modified_vector = kpi_vector.copy()
+        error_metadata = []
+        
+        # Update active errors list
+        self.update_active_errors(current_time)
+        
+        # For each cell
+        for cell_id in range(6):
+            # Get active errors for this cell
+            cell_errors = [e for e in self.active_errors 
+                          if e.cell_id == cell_id and e.is_active(current_time)]
+            
+            if not cell_errors:
+                continue
+            
+            # Extract indices: cell_id=0 → [0:7], cell_id=1 → [7:14], etc.
+            start_idx = cell_id * 7
+            end_idx = start_idx + 7
+            
+            cell_kpis = {
+                "throughput": modified_vector[start_idx],
+                "delay": modified_vector[start_idx + 1],
+                "packet_loss": modified_vector[start_idx + 2],
+                "ue_count": modified_vector[start_idx + 3],
+                "rsrp": modified_vector[start_idx + 4],
+                "sinr": modified_vector[start_idx + 5],
+                "cell_load": modified_vector[start_idx + 6]
+            }
+            
+            # Apply each active error
+            for error in cell_errors:
+                cell_kpis = self.apply_error_effects(cell_kpis, cell_id, current_time)
+            
+            # Write modified KPIs back to vector
+            modified_vector[start_idx] = cell_kpis["throughput"]
+            modified_vector[start_idx + 1] = cell_kpis["delay"]
+            modified_vector[start_idx + 2] = cell_kpis["packet_loss"]
+            modified_vector[start_idx + 3] = cell_kpis["ue_count"]
+            modified_vector[start_idx + 4] = cell_kpis["rsrp"]
+            modified_vector[start_idx + 5] = cell_kpis["sinr"]
+            modified_vector[start_idx + 6] = cell_kpis["cell_load"]
+            
+            # Add metadata for this cell
+            for error in cell_errors:
+                error_metadata.append({
+                    "cell_id": cell_id,
+                    "error_type": error.error_type.value,
+                    "severity": error.severity,
+                    "is_active": True,
+                    "timestamp": current_time
+                })
+        
+        return modified_vector, error_metadata
+    
+    def get_recent_errors(self, time_window: float = 10.0, current_time: float = 0.0) -> List[dict]:
+        """Get errors that were active in the recent time window."""
+        recent = []
+        for error in self.error_history:
+            # Check if error was active during the window
+            if error.end_time >= (current_time - time_window):
+                recent.append({
+                    "error_type": error.error_type.value,
+                    "cell_id": error.cell_id,
+                    "severity": error.severity,
+                    "start_time": error.start_time,
+                    "end_time": error.end_time,
+                    "duration": error.duration
+                })
+        return recent
 
 
 # Singleton instance
