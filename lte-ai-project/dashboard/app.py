@@ -48,30 +48,102 @@ error_injector = get_error_injector()
 
 
 def load_kpi_data():
-    """Load latest KPI data from CSV."""
-    config_path = Path(get_config("simulator.kpi_output_csv", "dataset/city_kpi_dataset.csv"))
-    default_path = Path("~/Desktop/project/ns-3-dev/city_kpi_dataset.csv").expanduser()
+    """Load latest KPI data from the single canonical CSV file."""
+    kpi_path = Path(__file__).parent.parent / "data" / "city_kpi_dataset.csv"
 
-    sim_data_path = Path("/home/thanos-s6/Desktop/project/lte-ai-project/data/city_kpi_dataset.csv")
-    paths_to_try = [config_path.expanduser(), default_path, sim_data_path]
-
-    kpi_path = None
-    for path in paths_to_try:
-        if path.exists():
-            kpi_path = path
-            break
-
-    if not kpi_path:
-        logger.warning(f"KPI file not found at any location. Checked: {paths_to_try}")
-        return None
+    if not kpi_path.exists():
+        logger.info(f"KPI file not found yet: {kpi_path}")
+        return pd.DataFrame()
 
     try:
         df = pd.read_csv(kpi_path)
-        logger.info(f"Loaded {len(df)} data points from {kpi_path}")
+        if len(df) > 0:
+            logger.info(f"Loaded {len(df)} data points from {kpi_path}")
         return df
+    except pd.errors.EmptyDataError:
+        return pd.DataFrame()
     except Exception as e:
-        logger.error(f"Error loading KPI data from {kpi_path}: {e}")
-        return None
+        logger.error(f"Error loading KPI data: {e}")
+        return pd.DataFrame()
+
+
+def create_waiting_figure(title: str, yaxis_title: str, height: int = 400, yaxis_range=None):
+    """Create a placeholder graph for a fresh run before KPI samples arrive."""
+    fig = go.Figure()
+    fig.add_trace(go.Scatter(
+        x=[0],
+        y=[0],
+        mode='lines',
+        name='Waiting for data',
+        line=dict(width=2, color='#95a5a6', dash='dot')
+    ))
+    fig.add_annotation(
+        text='Waiting for NS-3 data',
+        x=0,
+        y=0,
+        showarrow=False,
+        yshift=24,
+        font=dict(color='#7f8c8d')
+    )
+    fig.update_layout(
+        height=height,
+        hovermode='x unified',
+        margin=dict(l=50, r=20, t=20, b=50),
+        xaxis_title='Time (s)',
+        yaxis_title=yaxis_title,
+        template='plotly',
+        yaxis=dict(range=yaxis_range) if yaxis_range is not None else None
+    )
+    return fig
+
+
+def create_placeholder_metric_rows():
+    """Create zero-value metric cards for the period before NS-3 publishes data."""
+    cards = []
+    for enb_id in range(1, 7):
+        row_metrics = []
+        for metric_name in ("Throughput", "Delay", "Loss", "UE Count"):
+            row_metrics.append(html.Div([
+                html.Div(metric_name, style={
+                    "fontSize": "12px",
+                    "fontWeight": "bold",
+                    "color": "#2c3e50",
+                    "marginBottom": "5px"
+                }),
+                html.Div("0.0", style={
+                    "fontSize": "18px",
+                    "fontWeight": "bold",
+                    "color": "#95a5a6"
+                })
+            ], style={
+                "flex": "1",
+                "padding": "10px",
+                "textAlign": "center",
+                "border": "1px solid #bdc3c7",
+                "borderRadius": "4px",
+                "margin": "0 5px",
+                "background-color": "#ecf0f1"
+            }))
+
+        cards.append(html.Div([
+            html.Div(f"eNB{enb_id}", style={
+                "minWidth": "70px",
+                "fontWeight": "bold",
+                "color": "white",
+                "background-color": "#2c3e50",
+                "padding": "10px",
+                "textAlign": "center",
+                "borderRadius": "4px 0 0 4px"
+            }),
+            html.Div(row_metrics, style={"display": "flex", "flex": "1"})
+        ], style={
+            "display": "flex",
+            "marginBottom": "10px",
+            "alignItems": "stretch",
+            "gap": "5px"
+        }))
+
+    return cards
 
 
 def load_ai_decisions():
@@ -425,11 +497,29 @@ app.layout = create_app_layout()
 def update_graphs(n):
     """Update all graphs with latest data."""
     df = load_kpi_data()
-    
-    if df is None or len(df) == 0:
-        empty_fig = go.Figure().add_annotation(text="No data available")
-        empty_fig.update_layout(height=400)
-        return [empty_fig] * 6 + [html.Div("No data")] + ["Loading..."] + [html.Div("Waiting for AI decisions...")]
+
+    if df is None:
+        df = pd.DataFrame()
+
+    if df.empty:
+        active_error_status = error_injector.get_status(current_time=0)
+        active_errors = active_error_status.get("active_errors", 0)
+        waiting_figures = [
+            create_waiting_figure("Throughput", "Throughput"),
+            create_waiting_figure("Delay", "Delay"),
+            create_waiting_figure("Packet Loss", "Loss"),
+            create_waiting_figure("Load Balancing Score", "Score / Imbalance", height=350, yaxis_range=[0, 1.05]),
+            create_waiting_figure("SINR", "Sinr"),
+            create_waiting_figure("RSRP", "Rsrp")
+        ]
+        status_text = f"""Last Update: {datetime.now().strftime('%H:%M:%S')}
+Data Points: 0
+Active Errors: {active_errors}
+Load Imbalance: 0.00
+Overloaded Cells: 0 | Underutilized Cells: 0
+Model Status: Waiting for simulation data
+"""
+        return waiting_figures + [create_placeholder_metric_rows()] + [status_text] + [load_ai_decisions()]
     
     # Column mapping from CSV headers to metric names
     col_mapping = {

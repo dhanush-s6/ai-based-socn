@@ -25,7 +25,7 @@ def run_dataset_generator(num_ues=500, sim_time=600):
     print("STEP 1: Generating Training Dataset")
     print("="*60)
     
-    os.chdir("/home/darkdevil/Desktop/ns-3-dev")
+    os.chdir("/home/darkdevil/Desktop/project/ns-3-dev")
     
     cmd = f'./ns3 run "lte_ai_dataset_generator --numUe={num_ues} --simTime={sim_time}"'
     
@@ -43,7 +43,7 @@ def run_dataset_generator(num_ues=500, sim_time=600):
     print("✓ Dataset generation completed")
     
     # Verify dataset was created
-    dataset_path = Path("/home/darkdevil/Desktop/lte-ai-project/data/training_dataset.csv")
+    dataset_path = Path("/home/darkdevil/Desktop/project/lte-ai-project/data/training_dataset.csv")
     if not dataset_path.exists():
         print(f"❌ Dataset file not found at {dataset_path}")
         return False
@@ -171,7 +171,7 @@ def verify_model():
 
 def main():
     """Main training pipeline."""
-    os.chdir("/home/darkdevil/Desktop/lte-ai-project")
+    os.chdir("/home/darkdevil/Desktop/project/lte-ai-project")
     
     print("\n╔════════════════════════════════════════════════════════════╗")
     print("║      LTE AI Model Training Pipeline                      ║")
@@ -185,7 +185,7 @@ def main():
     print(f"Configuration:")
     print(f"  • UEs: {num_ues}")
     print(f"  • Simulation Time: {sim_time}s")
-    print(f"  • Dataset Path: /home/darkdevil/Desktop/lte-ai-project/data/training_dataset.csv")
+    print(f"  • Dataset Path: /home/darkdevil/Desktop/project/lte-ai-project/data/training_dataset.csv")
     print(f"  • Model Path: {get_config('ai_engine.hybrid_model_path', 'models/network_ai_hybrid.pkl')}")
     
     start_time = time.time()
@@ -196,7 +196,7 @@ def main():
         sys.exit(1)
     
     # Step 1.5: **NEW** Augment with error scenarios
-    dataset_path = "/home/darkdevil/Desktop/lte-ai-project/data/training_dataset.csv"
+    dataset_path = "/home/darkdevil/Desktop/project/lte-ai-project/data/training_dataset.csv"
     augment_with_errors(dataset_path)  # Non-fatal if fails
     
     # Step 2: Train model (now with error-augmented data)

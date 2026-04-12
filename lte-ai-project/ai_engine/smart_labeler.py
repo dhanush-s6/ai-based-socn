@@ -112,6 +112,8 @@ class ErrorDetector:
 
 
 class SONRules:
+    """Standard SON rules for network optimization."""
+    pass
 
 
 class SmartLabeler:

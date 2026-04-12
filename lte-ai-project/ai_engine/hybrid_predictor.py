@@ -509,7 +509,7 @@ if __name__ == "__main__":
     predictor = HybridPredictor()
     
     # Check if training data exists
-    training_data_path = "training_dataset.csv"
+    training_data_path = "data/training_dataset.csv"
     if Path(training_data_path).exists():
         print(f"Training model on {training_data_path}...")
         predictor.train(training_data_path)

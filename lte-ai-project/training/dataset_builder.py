@@ -11,6 +11,6 @@ for file in files:
 
 dataset = pd.concat(dataframes, ignore_index=True)
 
-dataset.to_csv("training_dataset.csv", index=False)
+dataset.to_csv("data/training_dataset.csv", index=False)
 
 print("Dataset size:", dataset.shape)

@@ -3,7 +3,7 @@ from sklearn.model_selection import train_test_split
 from sklearn.ensemble import RandomForestClassifier
 import joblib
 
-df = pd.read_csv("training_dataset.csv")
+df = pd.read_csv("data/training_dataset.csv")
 
 # Example feature selection
 features = [

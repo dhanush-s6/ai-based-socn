@@ -10,7 +10,7 @@ simulator:
   
   # KPI Logging
   kpi_interval: 1.0                    # KPI logging interval in seconds
-  kpi_output_csv: "/home/darkdevil/Desktop/lte-ai-project/data/city_kpi_dataset.csv"
+  kpi_output_csv: "/home/darkdevil/Desktop/project/lte-ai-project/data/city_kpi_dataset.csv"
   
   # Network Parameters
   enb_positions:
@@ -171,8 +171,8 @@ dashboard:
 
 # Data Pipeline Configuration
 data_pipeline:
-  training_data_path: "training_dataset.csv"
-  kpi_data_path: "dataset/city_kpi_dataset.csv"
+  training_data_path: "data/training_dataset.csv"
+  kpi_data_path: "data/city_kpi_dataset.csv"
   
   # CSV schema
   kpi_columns:
